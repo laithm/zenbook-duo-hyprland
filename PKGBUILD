@@ -10,7 +10,7 @@ depends=('hyprland' 'bash' 'bluez-utils' 'systemd')
 optdepends=('howdy-next: IR face unlock'
             'linux-enable-ir-emitter: enable the IR camera for Howdy')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('2bfe44fd493b6f60c432ed4dc7c03165ba1c2ee31997a960149a335535d61e58')
 
 package() {
     cd "$srcdir/$pkgname-$pkgver"
