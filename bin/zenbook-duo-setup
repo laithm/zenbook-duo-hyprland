@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Interactive, opt-in setup for zenbook-duo-hyprland. Nothing on the machine is
+# changed until you pick a component, and every step is safe to re-run.
+set -u
+
+# Locate the step-script library: the installed path first, then a repo-local
+# copy so this works straight from a git checkout during development.
+LIBDIR=""
+for cand in /usr/lib/zenbook-duo-hyprland "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" 2>/dev/null && pwd)"; do
+    [ -n "$cand" ] && [ -r "$cand/common.sh" ] && { LIBDIR="$cand"; break; }
+done
+: "${LIBDIR:?cannot find the zenbook-duo-hyprland lib dir}"
+# shellcheck source=/dev/null
+. "$LIBDIR/common.sh"
+# shellcheck source=/dev/null
+. "$LIBDIR/screen.sh"
+# shellcheck source=/dev/null
+. "$LIBDIR/keyboard.sh"
+# shellcheck source=/dev/null
+. "$LIBDIR/faceid.sh"
+
+FORCE=0
+
+usage() {
+    cat <<'EOF'
+zenbook-duo-setup -- set up Zenbook Duo features on Hyprland
+
+  (no args)        interactive menu
+  --force          skip the Zenbook Duo hardware check
+  --check          print diagnostics and exit
+  --remove-faceid  undo the Howdy PAM changes and exit
+  -h, --help       show this help
+EOF
+}
+
+do_check() {
+    load_config
+    msg "Diagnostics"
+    echo "Model:    $(cat /sys/class/dmi/id/product_name 2>/dev/null)"
+    if command -v hyprctl >/dev/null; then
+        echo "Monitors: $(hyprctl monitors 2>/dev/null | sed -n 's/^Monitor \([^ ]*\).*/\1/p' | tr '\n' ' ')"
+    fi
+    local kbd=absent d
+    for d in /sys/bus/usb/devices/*; do
+        [ -r "$d/idVendor" ] || continue
+        [ "$(cat "$d/idVendor" 2>/dev/null)" = "$KBD_VENDOR" ] &&
+        [ "$(cat "$d/idProduct" 2>/dev/null)" = "$KBD_PRODUCT" ] && { kbd=present; break; }
+    done
+    echo "Keyboard USB ($KBD_VENDOR:$KBD_PRODUCT): $kbd"
+    echo "Keyboard BT MAC: ${KBD_BT_MAC:-unset}"
+    echo "Howdy: $(pacman -Qq howdy-next 2>/dev/null || echo not-installed)"
+}
+
+main() {
+    case "${1:-}" in
+        -h|--help)       usage; exit 0 ;;
+        --check)         do_check; exit 0 ;;
+        --remove-faceid) remove_faceid; exit 0 ;;
+        --force)         FORCE=1 ;;
+        "")              ;;
+        *)               err "Unknown option: $1"; usage; exit 1 ;;
+    esac
+
+    if [ "$FORCE" -ne 1 ] && ! is_zenbook_duo; then
+        warn "This does not look like a Zenbook Duo ($(cat /sys/class/dmi/id/product_name 2>/dev/null))."
+        ask_yn "Continue anyway?" n || exit 1
+    fi
+
+    load_config
+    echo "Select components to set up:"
+    ask_yn "  1) Dual-screen auto-toggle?" y && DO_SCREEN=1 || DO_SCREEN=0
+    ask_yn "  2) Bluetooth keyboard auto-reconnect?" y && DO_KBD=1 || DO_KBD=0
+    ask_yn "  3) Face unlock (Howdy)?" n && DO_FACE=1 || DO_FACE=0
+
+    [ "$DO_SCREEN" = 1 ] && setup_screen
+    [ "$DO_KBD" = 1 ]    && setup_keyboard
+    [ "$DO_FACE" = 1 ]   && setup_faceid
+    ok "Done. Run 'zenbook-duo-setup --check' anytime to inspect state."
+}
+
+main "$@"
