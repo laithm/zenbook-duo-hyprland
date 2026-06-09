@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Auto-toggle the Zenbook Duo bottom screen based on whether the magnetic
+# keyboard is docked.
+#
+#   Keyboard docked over the lower panel -> connects via the pogo-pin USB
+#   bridge (vendor 0b05 / product 1b2c present) -> bottom screen should be OFF.
+#   Keyboard lifted off -> that USB device disappears (it falls back to
+#   Bluetooth) -> bottom screen should be ON.
+#
+# Launched from Hyprland (exec-once) so hyprctl inherits the compositor's
+# environment.
+
+set -u
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/zenbook-duo/config"
+
+# Defaults for a stock UX8406; the config file may override any of these.
+BOTTOM="eDP-2"
+ON_MODE="preferred,0x900,2"
+KBD_VENDOR="0b05"
+KBD_PRODUCT="1b2c"
+# shellcheck source=/dev/null
+[ -r "$CONFIG" ] && . "$CONFIG"
+
+ON_ARGS="${BOTTOM},${ON_MODE}"
+LOGFILE="${XDG_RUNTIME_DIR:-/tmp}/zenbook-duo-screen.log"
+log() { printf '%s zenbook-duo-screen: %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOGFILE"; }
+
+kbd_docked() {
+    local d vid pid
+    for d in /sys/bus/usb/devices/*; do
+        [ -r "$d/idVendor" ] || continue
+        # Read with cat, not $(<file 2>/dev/null): in bash that redirect
+        # disables the fast file-read and yields an empty string, which
+        # silently breaks detection (it always looks "detached").
+        vid=$(cat "$d/idVendor" 2>/dev/null)
+        pid=$(cat "$d/idProduct" 2>/dev/null)
+        [ "$vid" = "$KBD_VENDOR" ] && [ "$pid" = "$KBD_PRODUCT" ] && return 0
+    done
+    return 1
+}
+
+# Assert the correct monitor state for the current dock status. Stateless and
+# idempotent: re-issuing the same hyprctl keyword is harmless. Only logs on a
+# real change.
+apply() {
+    local want
+    if kbd_docked; then want="off"; else want="on"; fi
+    [ "$want" = "$STATE" ] && return
+    if [ "$want" = "off" ]; then
+        log "keyboard docked -> disabling $BOTTOM"
+        hyprctl keyword monitor "${BOTTOM},disable" >/dev/null
+    else
+        log "keyboard detached -> enabling $BOTTOM"
+        hyprctl keyword monitor "$ON_ARGS" >/dev/null
+    fi
+    STATE="$want"
+}
+
+STATE="unknown"
+apply   # sync once at startup
+
+# React to USB add/remove events. Settle briefly so enumeration finishes, then
+# re-evaluate. apply() is a no-op when nothing changed.
+#
+#   - stdbuf -oL line-buffers udevadm's stdout; without it the pipe
+#     block-buffers and the loop never sees events promptly.
+#   - process substitution keeps the loop in the main shell so STATE persists.
+while read -r _; do
+    sleep 0.4
+    apply
+done < <(stdbuf -oL udevadm monitor --udev --subsystem-match=usb 2>/dev/null)
