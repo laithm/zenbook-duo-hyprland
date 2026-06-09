@@ -1,0 +1,17 @@
+pkgbase = zenbook-duo-hyprland
+	pkgdesc = Dual-screen auto-toggle, Bluetooth keyboard, and face unlock setup for ASUS Zenbook Duo on Hyprland
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/laithm/zenbook-duo-hyprland
+	arch = any
+	license = MIT
+	depends = hyprland
+	depends = bash
+	depends = bluez-utils
+	depends = systemd
+	optdepends = howdy-next: IR face unlock
+	optdepends = linux-enable-ir-emitter: enable the IR camera for Howdy
+	source = zenbook-duo-hyprland-0.1.0.tar.gz::https://github.com/laithm/zenbook-duo-hyprland/archive/refs/tags/v0.1.0.tar.gz
+	sha256sums = SKIP
+
+pkgname = zenbook-duo-hyprland
