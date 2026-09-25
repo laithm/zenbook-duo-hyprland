@@ -1,0 +1,10 @@
+# ~/.config/zenbook-duo/config -- device overrides for zenbook-duo-hyprland.
+# Defaults are shown; uncomment a line to change it. Only KBD_BT_MAC is
+# genuinely per-unit (your keyboard's Bluetooth address); the rest are the
+# same across UX8406 machines.
+
+#BOTTOM="eDP-2"
+#ON_MODE="preferred,0x900,2"
+#KBD_VENDOR="0b05"
+#KBD_PRODUCT="1b2c"
+#KBD_BT_MAC=""

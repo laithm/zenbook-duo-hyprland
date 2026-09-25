@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Toggle the lower Zenbook Duo display when the detachable keyboard is docked.
+set -u
+
+CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/zenbook-duo/config"
+
+BOTTOM="eDP-2"
+ON_MODE="preferred,0x900,2"
+KBD_VENDOR="0b05"
+KBD_PRODUCT="1b2c"
+
+# shellcheck source=/dev/null
+[ -r "$CONFIG" ] && . "$CONFIG"
+
+ON_ARGS="${BOTTOM},${ON_MODE}"
+LOGFILE="${XDG_RUNTIME_DIR:-/tmp}/zenbook-duo-screen.log"
+
+log() {
+    printf '%s zenbook-duo-screen: %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOGFILE"
+}
+
+kbd_docked() {
+    local d vid pid
+
+    for d in /sys/bus/usb/devices/*; do
+        [ -r "$d/idVendor" ] || continue
+
+        # Keep cat here. In bash, $(<file 2>/dev/null) can return an empty
+        # string, which made the keyboard look permanently detached.
+        vid=$(cat "$d/idVendor" 2>/dev/null)
+        pid=$(cat "$d/idProduct" 2>/dev/null)
+
+        [ "$vid" = "$KBD_VENDOR" ] &&
+            [ "$pid" = "$KBD_PRODUCT" ] &&
+            return 0
+    done
+
+    return 1
+}
+
+apply() {
+    local want spec
+
+    if kbd_docked; then
+        want="off"
+        spec="${BOTTOM},disable"
+    else
+        want="on"
+        spec="$ON_ARGS"
+    fi
+
+    [ "$want" = "$STATE" ] && return
+
+    if hyprctl keyword monitor "$spec" >/dev/null; then
+        if [ "$want" = "off" ]; then
+            log "keyboard docked -> disabled $BOTTOM"
+        else
+            log "keyboard detached -> enabled $BOTTOM"
+        fi
+        STATE="$want"
+    else
+        log "hyprctl failed while applying: $spec"
+    fi
+}
+
+STATE="unknown"
+apply
+
+# udevadm is block-buffered through a pipe, so force line buffering here.
+while read -r _; do
+    sleep 0.4
+    apply
+done < <(stdbuf -oL udevadm monitor --udev --subsystem-match=usb 2>/dev/null)
