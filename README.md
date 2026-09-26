@@ -65,9 +65,12 @@ keyboard docked   -> disable eDP-2
 keyboard detached -> enable eDP-2
 ```
 
-Setup adds an `exec-once` block to your Hyprland config. If
-`hyprland.conf` already sources `userprefs.conf`, it uses that file; otherwise
-it writes the managed block to `hyprland.conf` itself.
+Setup adds the daemon to your Hyprland config and also runs a one-shot sync after
+each config reload. This keeps the lower screen off if a reload restores the
+monitor while the keyboard is still docked.
+
+If `hyprland.conf` already sources `userprefs.conf`, setup uses that file;
+otherwise it writes the managed block to `hyprland.conf` itself.
 
 The daemon logs to:
 

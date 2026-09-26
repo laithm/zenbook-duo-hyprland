@@ -19,6 +19,15 @@ log() {
     printf '%s zenbook-duo-screen: %s\n' "$(date '+%H:%M:%S')" "$*" | tee -a "$LOGFILE"
 }
 
+usage() {
+    cat <<'EOF'
+zenbook-duo-screen [--sync]
+
+  no args   watch keyboard dock/undock events
+  --sync    apply the correct display state once and exit
+EOF
+}
+
 kbd_docked() {
     local d vid pid
 
@@ -60,11 +69,23 @@ apply() {
         STATE="$want"
     else
         log "hyprctl failed while applying: $spec"
+        return 1
     fi
 }
 
+SYNC_ONCE=0
+
+case "${1:-}" in
+    --sync)     SYNC_ONCE=1 ;;
+    -h|--help) usage; exit 0 ;;
+    "")         ;;
+    *)          usage >&2; exit 2 ;;
+esac
+
 STATE="unknown"
 apply
+
+[ "$SYNC_ONCE" -eq 1 ] && exit 0
 
 # udevadm is block-buffered through a pipe, so force line buffering here.
 while read -r _; do
